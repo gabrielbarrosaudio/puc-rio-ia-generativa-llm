@@ -1,0 +1,9 @@
+label,origin,source_word,count
+up,public,up,1000
+down,public,down,1000
+left,public,left,1000
+right,public,right,1000
+stop,public,stop,1000
+unknown,public,go,400
+unknown,public,no,400
+unknown,public,yes,400
