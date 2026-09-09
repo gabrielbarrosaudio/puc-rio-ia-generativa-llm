@@ -1,0 +1,13 @@
+label,origin,source_word,count
+one,public,one,3890
+two,public,two,3880
+three,public,three,3727
+four,public,four,3728
+five,public,five,4052
+six,public,six,3860
+unknown,public,zero,150
+unknown,public,seven,150
+unknown,public,eight,150
+unknown,public,nine,150
+unknown,public,yes,150
+unknown,public,no,150

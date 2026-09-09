@@ -4,12 +4,13 @@ point A to point B, avoiding walls (block movement) and holes (instant
 loss), using a freely-spoken direction each turn plus a number card you
 must pick from your current hand of 3.
 
-Direction: real voice recognition, reusing the same trained model as
-pong_voice.py (checkpoints/best_model.pt must exist -- run the Stage 1-4
-pipeline in the project root first).
+Direction: real voice recognition, reusing the trained model from
+pong_voice.py (checkpoints/best_model.pt).
 
-Number: keyboard placeholder (press 1-6) until a digit-recognition model
-is trained -- see number_input.py for why, and how to swap it out later.
+Number: real voice recognition too (one-six), using the digit model
+trained separately in digits/ (digits/checkpoints/best_model.pt). Two
+independent VoiceCommandListener instances run concurrently, each with
+its own microphone stream and its own model.
 
 Run from the project root:
     python -m boardgame.game
@@ -25,8 +26,11 @@ import turtle
 from boardgame import config
 from boardgame.maze import generate_board, Cell
 from boardgame.deck import NumberHand
-from boardgame.number_input import NumberInputPlaceholder
 from src.bridge import VoiceCommandListener
+from digits.bridge import VoiceCommandListener as NumberVoiceListener
+from digits import config as digits_config
+
+WORD_TO_NUMBER = {word: i + 1 for i, word in enumerate(digits_config.NUMBERS)}
 
 CELL_COLORS = {
     Cell.EMPTY: "#f4f4f4",
@@ -197,7 +201,8 @@ def main():
     ensure_safe_hand(board, board.start, number_hand)
     direction_listener = VoiceCommandListener()
     direction_listener.start()
-    number_input = NumberInputPlaceholder(wn, config.NUMBER_MIN, config.NUMBER_MAX)
+    number_listener = NumberVoiceListener()
+    number_listener.start()
 
     regenerate_requested = [False]
 
@@ -221,7 +226,7 @@ def main():
     def prompt_line():
         if phase == "direction":
             return "Fale uma direcao: up / down / left / right"
-        return f"Escolha um numero da mao (teclado 1-6): {number_hand.hand}"
+        return f"Fale um numero da mao: {number_hand.hand}"
 
     draw_hud(status_line() + "\n" + prompt_line())
 
@@ -242,7 +247,8 @@ def main():
                 continue
 
             voice_cmd = direction_listener.get_command()
-            number_cmd = number_input.get_command()
+            number_word = number_listener.get_command()
+            number_cmd = WORD_TO_NUMBER.get(number_word)
 
             if phase == "direction" and voice_cmd in config.DIRECTIONS:
                 pending_direction = voice_cmd
@@ -306,6 +312,7 @@ def main():
         pass
     finally:
         direction_listener.stop()
+        number_listener.stop()
 
 
 if __name__ == "__main__":
