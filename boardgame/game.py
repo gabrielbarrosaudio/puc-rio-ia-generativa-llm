@@ -4,13 +4,12 @@ point A to point B, avoiding walls (block movement) and holes (instant
 loss), using a freely-spoken direction each turn plus a number card you
 must pick from your current hand of 3.
 
-Direction: real voice recognition, reusing the trained model from
-pong_voice.py (checkpoints/best_model.pt).
-
-Number: real voice recognition too (one-six), using the digit model
-trained separately in digits/ (digits/checkpoints/best_model.pt). Two
-independent VoiceCommandListener instances run concurrently, each with
-its own microphone stream and its own model.
+Voice: a single unified model (voice/) recognizes both direction words
+(up/down/left/right/stop) and number words (one-six) in one 13-class
+classifier -- replaces the earlier two-separate-models setup, which had
+real cross-confusion in live testing (e.g. "left" misclassified as "one")
+because each specialist model had never truly learned the other's
+vocabulary. One listener, one microphone stream now.
 
 Run from the project root:
     python -m boardgame.game
@@ -26,11 +25,10 @@ import turtle
 from boardgame import config
 from boardgame.maze import generate_board, Cell
 from boardgame.deck import NumberHand
-from src.bridge import VoiceCommandListener
-from digits.bridge import VoiceCommandListener as NumberVoiceListener
-from digits import config as digits_config
+from voice.bridge import VoiceCommandListener
+from voice import config as voice_config
 
-WORD_TO_NUMBER = {word: i + 1 for i, word in enumerate(digits_config.NUMBERS)}
+WORD_TO_NUMBER = {word: i + 1 for i, word in enumerate(voice_config.NUMBERS)}
 
 CELL_COLORS = {
     Cell.EMPTY: "#f4f4f4",
@@ -199,10 +197,8 @@ def main():
 
     number_hand = NumberHand()
     ensure_safe_hand(board, board.start, number_hand)
-    direction_listener = VoiceCommandListener()
-    direction_listener.start()
-    number_listener = NumberVoiceListener()
-    number_listener.start()
+    listener = VoiceCommandListener()
+    listener.start()
 
     regenerate_requested = [False]
 
@@ -246,9 +242,9 @@ def main():
                 draw_hud("Labirinto regenerado.\n" + status_line() + "\n" + prompt_line())
                 continue
 
-            voice_cmd = direction_listener.get_command()
-            number_word = number_listener.get_command()
-            number_cmd = WORD_TO_NUMBER.get(number_word)
+            cmd = listener.get_command()
+            voice_cmd = cmd if cmd in config.DIRECTIONS else None
+            number_cmd = WORD_TO_NUMBER.get(cmd)
 
             if phase == "direction" and voice_cmd in config.DIRECTIONS:
                 pending_direction = voice_cmd
@@ -308,11 +304,10 @@ def main():
         wn.update()
         time.sleep(3)
 
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, turtle.Terminator):
         pass
     finally:
-        direction_listener.stop()
-        number_listener.stop()
+        listener.stop()
 
 
 if __name__ == "__main__":

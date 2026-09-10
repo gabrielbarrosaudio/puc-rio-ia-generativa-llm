@@ -1,14 +1,14 @@
               precision    recall  f1-score   support
 
-         one       0.97      0.96      0.96       578
-         two       0.92      0.97      0.94       570
-       three       0.97      0.93      0.95       529
-        four       0.97      0.91      0.94       561
-        five       0.86      0.97      0.91       588
-         six       0.97      0.94      0.95       551
-     silence       0.98      1.00      0.99        58
-     unknown       0.83      0.60      0.69       141
+         one       0.91      0.97      0.94       538
+         two       0.94      0.96      0.95       578
+       three       0.97      0.93      0.95       551
+        four       0.94      0.96      0.95       543
+        five       0.91      0.97      0.94       585
+         six       0.95      0.97      0.96       538
+     silence       0.94      1.00      0.97        47
+     unknown       0.85      0.53      0.66       253
 
-    accuracy                           0.94      3576
-   macro avg       0.93      0.91      0.92      3576
-weighted avg       0.94      0.94      0.93      3576
+    accuracy                           0.93      3633
+   macro avg       0.93      0.91      0.91      3633
+weighted avg       0.93      0.93      0.93      3633

@@ -26,7 +26,7 @@ sys.path.append(str(Path(__file__).resolve().parent))
 
 import turtle
 
-from src.bridge import VoiceCommandListener
+from voice.bridge import VoiceCommandListener
 
 wn = turtle.Screen()
 wn.title("Pong - Voice Controlled")
@@ -72,7 +72,7 @@ pen.write("Player A: 0  Player B: 0", align="center", font=("Courier", 24, "norm
 
 
 PADDLE_STEP = 20    # step size for a single keypress
-VOICE_STEP = 60     # step size for a single voice command (bigger movement per command)
+VOICE_STEP = 60      # step size for a single voice command (bigger movement per command)
 
 
 def paddle_a_up(step=PADDLE_STEP):
@@ -91,6 +91,7 @@ def paddle_a_left(step=PADDLE_STEP):
 def paddle_a_right(step=PADDLE_STEP):
     # placeholder -- replace with your redesigned movement/collision logic
     paddle_a.setx(min(380, paddle_a.xcor() + step))
+
 
 def paddle_b_up():
     paddle_b.sety(paddle_b.ycor() + 20)

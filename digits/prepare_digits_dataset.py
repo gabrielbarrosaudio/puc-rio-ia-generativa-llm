@@ -25,7 +25,13 @@ from pathlib import Path
 from . import config
 
 DIRECT_MAP = {word: word for word in config.NUMBERS}  # one->one, two->two, ...
-UNKNOWN_SOURCE_WORDS = ["zero", "seven", "eight", "nine", "yes", "no"]
+# 'zero'/'seven'/'eight'/'nine'/'yes'/'no' are generic negative vocabulary.
+# 'up'/'down'/'left'/'right'/'stop' are added specifically because they are
+# the OTHER model's vocabulary and will genuinely be spoken while this
+# model is also listening in the real game -- without them, live testing
+# showed direction words like "right" being misclassified as a number.
+UNKNOWN_SOURCE_WORDS = ["zero", "seven", "eight", "nine", "yes", "no",
+                        "up", "down", "left", "right", "stop"]
 
 
 def copy_direct_classes(source_dir: Path, manifest_rows: list):
