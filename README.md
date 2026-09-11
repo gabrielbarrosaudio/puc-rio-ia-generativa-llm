@@ -1,90 +1,125 @@
-# TCC: Classificação de Comandos de Voz em Tempo Real com PyTorch, Integrada a um Jogo Pong
+# TCC: Classificação de Comandos de Voz em Tempo Real com PyTorch
 
-Proof of concept: um CNN treinado em PyTorch classifica comandos de voz
-(`up`, `down`, `left`, `right`, `stop`) em tempo real e controla a raquete A
-de um jogo Pong feito com Turtle.
+Proof of concept de reconhecimento de comandos de voz em tempo real
+(PyTorch), integrado a dois jogos: um **Pong** controlado por voz e um
+**jogo de tabuleiro** (estilo Mario Party) com labirinto gerado
+proceduralmente e um sistema de cartas jogado por voz.
 
-## Escopo (decidido nesta conversa)
+## Estado atual do projeto
 
-- **Dataset**: público, [mini_speech_commands](https://ai.googleblog.com/2017/08/launching-speech-commands-dataset.html)
-  (Warden, 2018) -- 1000 clipes cada de `up/down/left/right/stop`, mais
-  `go/no/yes` reaproveitados como classe `unknown`. Nenhuma voz sua é
-  necessária -- é um PoC deliberadamente treinado só com dados públicos,
-  para generalizar a qualquer falante.
-- **Silêncio**: sintético (ruído gaussiano de baixa amplitude), já que o
-  dataset público não inclui essa classe. **Documente isso como limitação
-  conhecida no TCC** -- silêncio sintético não é idêntico a ruído real de
-  ambiente.
-- **Split treino/val/teste**: por falante (nenhuma pessoa aparece em mais
-  de um conjunto), pra medir generalização de verdade a vozes não vistas.
+O projeto passou por uma iteração real de desenvolvimento, documentada
+abaixo porque isso é conteúdo legítimo de metodologia pro TCC (não é
+só "o resultado final", é o processo).
 
-## Pipeline, passo a passo
+| Pasta | Status | O que é |
+|---|---|---|
+| **`voice/`** | ✅ **Em uso** | Modelo único e unificado (13 classes: `up/down/left/right/stop` + `one`-`six` + `silence` + `unknown`). É o que os dois jogos usam hoje. |
+| `src/` | 🗄️ Histórico | Primeira versão: modelo só de direção (5 classes). Substituído. |
+| `digits/` | 🗄️ Histórico | Segunda versão: modelo separado só de números (8 classes), rodando em paralelo ao `src/`. Substituído. |
+
+**Por que `src/` e `digits/` existem mas não são usados**: a abordagem
+inicial usava dois classificadores especialistas rodando ao mesmo tempo
+(dois microfones simultâneos). Em teste ao vivo, isso causou confusão
+real e reproduzível (ex: a palavra `"left"` sendo classificada como
+`"one"`, `"right"` como `"five"`) — cada modelo nunca tinha aprendido de
+verdade o vocabulário do outro, só uma amostra fraca dele como classe
+negativa. Tentativas de correção incremental (mais dados negativos, peso
+de classe, limiares de confiança) reduziram mas não eliminaram o
+problema. A correção estrutural foi unificar tudo num único modelo de 13
+classes (`voice/`), que aprende cada palavra como classe própria e
+balanceada — isso eliminou a confusão por completo em teste. Essa
+progressão (diagnóstico → tentativa incremental → correção estrutural)
+está documentada nos commits do repositório.
+
+## Os dois jogos
+
+- **`pong_voice.py`** — Pong clássico, raquete A controlada por voz
+  (`up`/`down`/`left`/`right`/`stop`), raquete B por teclado.
+- **`boardgame/`** — jogo de tabuleiro: leve seu peão do ponto A ao ponto
+  B, desviando de paredes (bloqueiam e fazem "quicar") e buracos
+  (mandam de volta ao início). Direção falada livremente; número de casas
+  escolhido de uma mão de 3 cartas (também falada), sempre garantida
+  para não te forçar a cair num buraco. Labirinto gerado
+  proceduralmente, com garantia matemática (BFS) de que sempre existe
+  caminho A→B.
+
+## Pipeline do modelo de voz (`voice/`)
 
 ```bash
 # 0. Ambiente
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+venv\Scripts\activate            # Linux/Mac: source venv/bin/activate
 pip install -r requirements.txt
 
-# 1. Importar o dataset público (extraia o zip em algum lugar antes)
-python -m src.prepare_public_dataset --source_dir /caminho/para/mini_speech_commands --unknown_per_word 400
+# 1. Importar o vocabulário completo do dataset público
+#    (baixe e extraia http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz antes)
+python -m voice.prepare_dataset --source_dir /caminho/para/speech_commands_v0.02_extracted --unknown_per_word 220
 
-# 2. Gerar a classe "silence" sintética
-python -m src.generate_silence --num 300
+# 2. Extrair ruído real de fundo para a classe "silence"
+python -m voice.extract_background_noise --source_dir /caminho/para/speech_commands_v0.02_extracted --num 400
 
 # 3. Treinar
-python -m src.train
-#    -> checkpoints/best_model.pt
-#    -> results/train_log.csv, results/training_curves.png
+python -m voice.train
+#    -> voice/checkpoints/best_model.pt
+#    -> voice/results/train_log.csv, training_curves.png
 
 # 4. Avaliar no conjunto de teste (falantes nunca vistos no treino)
-python -m src.evaluate
-#    -> results/confusion_matrix.png
-#    -> results/classification_report.txt
-#    -> results/inference_latency.csv
+python -m voice.evaluate
+#    -> voice/results/confusion_matrix.png
+#    -> voice/results/classification_report.txt
+#    -> voice/results/inference_latency.csv
 
-# 5. Testar o reconhecimento em tempo real isoladamente (sem o jogo)
-python -m src.bridge
-#    fala um comando, deve aparecer "-> recognized: <label>" no terminal
+# 5. Testar o reconhecimento em tempo real isoladamente (sem jogo)
+python -m voice.bridge
 
-# 6. Jogar com controle por voz
+# 6. Jogar
 python pong_voice.py
+python -m boardgame.game
 ```
 
 ## Estrutura do projeto
-
-```
-tcc_voice_pong/
-├── src/
-│   ├── config.py                 # todas as constantes centralizadas
-│   ├── prepare_public_dataset.py # Stage 1b: importa o dataset público
-│   ├── generate_silence.py       # Stage 1c: gera classe "silence" sintética
-│   ├── record_data.py            # Stage 1 (opcional/futuro): gravação pessoal
-│   ├── features.py               # Stage 2: waveform -> log-mel spectrogram
-│   ├── dataset.py                # Stage 2: PyTorch Dataset + split por falante
-│   ├── model.py                  # Stage 3: CNN
-│   ├── train.py                  # Stage 4: treino, logging, checkpoints
-│   ├── evaluate.py               # Stage 4b: matriz de confusão, latência
-│   └── bridge.py                 # Stage 5: listener em tempo real (thread + fila)
-├── pong_voice.py                 # Stage 6: jogo integrado
-├── pong_original.py              # seu arquivo original, intocado
-├── data/commands/<label>/*.wav   # populado pelos scripts acima
-├── results/                      # métricas, gráficos, logs (gerados, não fabricados)
-└── checkpoints/                  # pesos do modelo treinado
-```
+puc-rio-ia-generativa-llm/
+├── voice/ # modelo unificado (EM USO)
+│ ├── config.py
+│ ├── prepare_dataset.py # importa up/down/left/right/stop/one-six + unknown
+│ ├── extract_background_noise.py # silence a partir de ruído real
+│ ├── features.py # waveform -> log-mel spectrogram
+│ ├── dataset.py # Dataset + split por falante
+│ ├── model.py # CNN (13 classes)
+│ ├── train.py # treino com class-weighted loss
+│ ├── evaluate.py # matriz de confusão, latência
+│ └── bridge.py # listener em tempo real (thread + fila)
+├── boardgame/ # jogo de tabuleiro
+│ ├── config.py
+│ ├── maze.py # geração de labirinto + física de movimento/quique
+│ ├── deck.py # sistema de cartas de número
+│ └── game.py # loop principal (Turtle)
+├── pong_voice.py # Pong controlado por voz
+├── pong_original.py # arquivo original do usuário, intocado
+├── src/ # [histórico] modelo só de direção
+├── digits/ # [histórico] modelo só de número
+├── data/, results/, checkpoints/ # artefatos do src/ (histórico)
+└── requirements.txt
 
 ## Escrevendo os resultados no TCC
 
-Tudo em `results/` vem de rodar os scripts de verdade -- nada foi
-inventado. Sugestão de como usar cada artefato na monografia:
+Tudo em `voice/results/` vem de rodar os scripts de verdade — nenhum
+número foi inventado.
 
-- `results/dataset_manifest.csv` → tabela de composição do dataset (seção de Metodologia).
-- `results/training_curves.png` → curvas de loss/acurácia (mostra se houve overfitting).
-- `results/confusion_matrix.png` + `classification_report.txt` → seção de Resultados (acurácia por classe, precision/recall/F1).
-- `results/inference_latency.csv` → discussão de viabilidade de tempo real (latência de inferência pura, em CPU).
-- Ao rodar `pong_voice.py`, anote observações qualitativas (falsos positivos durante ruído, delay percebido) -- isso é dado experimental real, mesmo sem uma métrica numérica formal.
+- `voice/results/dataset_manifest.csv` → composição do dataset (Metodologia).
+- `voice/results/training_curves.png` → curvas de loss/acurácia.
+- `voice/results/confusion_matrix.png` + `classification_report.txt` → Resultados (acurácia por classe).
+- `voice/results/inference_latency.csv` → viabilidade de tempo real.
+- O histórico de commits do repositório documenta o processo iterativo de diagnóstico e correção (desenvolvimento dos jogos → dois modelos → confusão observada → correção estrutural) — útil pra Metodologia/Discussão.
 
 **Limitações a declarar honestamente:**
-1. Classe `silence` é sintética, não ruído real de ambiente.
-2. O modelo nunca foi testado com a sua própria voz/microfone -- é um PoC de viabilidade, não uma validação de uso pessoal.
-3. `left`/`right` no jogo são um placeholder de movimentação (ver comentário em `pong_voice.py`) até você redesenhar a raquete A.
+1. Dataset é público (Google Speech Commands), não gravado pelos autores — é um PoC de viabilidade, generalização a qualquer falante, não uma validação de uso pessoal.
+2. `silence` usa ruído de fundo real do próprio dataset (não do ambiente de uso final) — ainda pode não cobrir todo tipo de ruído do mundo real.
+3. `left`/`right` no Pong são um placeholder de movimentação (ver comentário em `pong_voice.py`).
+4. Vocabulário de comando é em inglês (herdado do dataset), não português.
+
+## Dataset e licença
+
+[Google Speech Commands Dataset v0.02](http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz)
+(Warden, P. *Speech Commands: A public dataset for single-word speech
+recognition*, 2017), licença Creative Commons BY 4.0.
