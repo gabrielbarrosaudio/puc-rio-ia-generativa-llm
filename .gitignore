@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Datasets and generated audio (large, regenerable via the prepare_*.py scripts)
+*/data/commands/
+data/commands/
+
+# Trained model weights (large, regenerable via train.py)
+*/checkpoints/
+checkpoints/
+
+# Generated results (regenerable via evaluate.py) -- keep small CSVs/text if you
+# want them in the repo as evidence; this ignores the images which can be large
+*/results/*.png
+
+# OS/editor cruft
+.DS_Store
+.vscode/
